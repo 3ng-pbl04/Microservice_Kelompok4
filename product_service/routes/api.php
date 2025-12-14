@@ -3,8 +3,18 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ProductController;
 
-Route::get('/products',[ProductController::class,'index']);
-Route::get('/products/{id}',[ProductController::class,'show']);
-Route::post('/products',[ProductController::class,'store']);
-Route::put('/products/{id}',[ProductController::class,'update']);
-Route::delete('/products/{id}',[ProductController::class,'destroy']);
+Route::prefix('v1')->group(function () {
+
+    // Product CRUD
+    Route::apiResource('products', ProductController::class);
+
+    // Health check
+    Route::get('health', function () {
+        return response()->json([
+            'status' => 'UP',
+            'service' => 'product_service',
+            'time' => now()
+        ]);
+    });
+
+});

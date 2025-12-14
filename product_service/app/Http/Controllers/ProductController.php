@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use App\Services\ProductService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
@@ -16,6 +17,12 @@ class ProductController extends Controller
     /**
      * Get correlation ID from request context
      */
+    protected ProductService $productService;
+
+    public function __construct(ProductService $productService)
+    {
+        $this->productService = $productService;
+    }
     private function getCorrelationId($request = null)
     {
         if ($request && $request->attributes->has('correlation_id')) {
@@ -29,7 +36,7 @@ class ProductController extends Controller
         try {
             $correlationId = $this->getCorrelationId($request);
             Log::info('Get Product List', ['correlation_id' => $correlationId]);
-            $products = Product::all();
+            $products = $this->productService->getAll();
             
             return response()->json([
                 'success' => true,
@@ -39,11 +46,16 @@ class ProductController extends Controller
             
         } catch (\Exception $e) {
             $correlationId = $this->getCorrelationId($request);
-            Log::error('Error fetching product list', [
+            $context = [
                 'correlation_id' => $correlationId,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
+                ];
+
+            if (config('app.debug')) {
+                $context['trace'] = $e->getTraceAsString();
+            }
+
+            Log::error('Error fetching product list', $context);
             
             return response()->json([
                 'success' => false,
@@ -82,7 +94,7 @@ class ProductController extends Controller
 
             $validatedData = $validator->validated();
             
-            $product = Product::create($validatedData);
+            $product = $this->productService->create($validatedData);
             
             $correlationId = $this->getCorrelationId($request);
             Log::info('Product Created', [
@@ -102,7 +114,7 @@ class ProductController extends Controller
             Log::warning('Validation failed for product creation', [
                 'correlation_id' => $correlationId,
                 'errors' => $e->errors(),
-                'input' => $request->all()
+                'failed_fields' => array_keys($e->errors())
             ]);
             
             return response()->json([
@@ -113,11 +125,15 @@ class ProductController extends Controller
             
         } catch (QueryException $e) {
             $correlationId = $this->getCorrelationId($request);
-            Log::error('Database error while creating product', [
+            $context = [
                 'correlation_id' => $correlationId,
                 'error' => $e->getMessage(),
-                'code' => $e->getCode()
-            ]);
+                ];
+
+            if (config('app.debug')) {
+                $context['trace'] = $e->getTraceAsString();
+            }
+            Log::error('...', $context);
             
             $errorMessage = 'Database error occurred';
             $statusCode = Response::HTTP_INTERNAL_SERVER_ERROR;
@@ -136,16 +152,26 @@ class ProductController extends Controller
             
         } catch (\Exception $e) {
             $correlationId = $this->getCorrelationId($request);
-            Log::error('Unexpected error while creating product', [
+
+            $context = [
                 'correlation_id' => $correlationId,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            
+                ];
+
+            if (config('app.debug')) {
+                $context['trace'] = $e->getTraceAsString();
+            }
+
+            Log::error('Unexpected error while creating product', $context);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create product',
-                'error' => config('app.debug') ? $e->getMessage() : null
+                'data' => null,
+                'errors' => null,
+                'meta' => [
+                    'correlation_id' => $correlationId
+                ]
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
@@ -161,7 +187,7 @@ class ProductController extends Controller
                 ], Response::HTTP_BAD_REQUEST);
             }
 
-            $product = Product::find($id);
+            $product = $this->productService->getById($id);
             
             if (!$product) {
                 $correlationId = $this->getCorrelationId($request);
@@ -184,12 +210,16 @@ class ProductController extends Controller
             
         } catch (\Exception $e) {
             $correlationId = $this->getCorrelationId($request);
-            Log::error('Error fetching product detail', [
+            $context = [
                 'correlation_id' => $correlationId,
-                'id' => $id,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
+            ];
+
+            if (config('app.debug')) {
+                $context['trace'] = $e->getTraceAsString();
+            }
+
+            Log::error('Error fetching product list', $context);
             
             return response()->json([
                 'success' => false,
@@ -251,7 +281,7 @@ class ProductController extends Controller
             // Simpan data lama untuk logging
             $oldData = $product->toArray();
             
-            $product->update($validatedData);
+            $product=$this->productService->update($product, $validatedData);
             
             $correlationId = $this->getCorrelationId($request);
             Log::info('Product Updated', [
@@ -283,12 +313,16 @@ class ProductController extends Controller
             
         } catch (QueryException $e) {
             $correlationId = $this->getCorrelationId($request);
-            Log::error('Database error while updating product', [
+            $context = [
                 'correlation_id' => $correlationId,
-                'id' => $id,
                 'error' => $e->getMessage(),
-                'code' => $e->getCode()
-            ]);
+            ];
+
+            if (config('app.debug')) {
+                $context['trace'] = $e->getTraceAsString();
+            }
+
+            Log::error('Error fetching product list', $context);
             
             $errorMessage = 'Database error occurred while updating product';
             $statusCode = Response::HTTP_INTERNAL_SERVER_ERROR;
@@ -347,7 +381,7 @@ class ProductController extends Controller
             // Simpan data untuk logging sebelum dihapus
             $productData = $product->toArray();
             
-            $product->delete();
+            $this->productService->delete($product);
             
             $correlationId = $this->getCorrelationId($request);
             Log::info('Product Deleted', [
@@ -363,12 +397,16 @@ class ProductController extends Controller
             
         } catch (QueryException $e) {
             $correlationId = $this->getCorrelationId($request);
-            Log::error('Database error while deleting product', [
+            $context = [
                 'correlation_id' => $correlationId,
-                'id' => $id,
                 'error' => $e->getMessage(),
-                'code' => $e->getCode()
-            ]);
+            ];
+
+            if (config('app.debug')) {
+                $context['trace'] = $e->getTraceAsString();
+            }
+
+            Log::error('Error fetching product list', $context);
             
             $message = 'Failed to delete product';
             $statusCode = Response::HTTP_INTERNAL_SERVER_ERROR;

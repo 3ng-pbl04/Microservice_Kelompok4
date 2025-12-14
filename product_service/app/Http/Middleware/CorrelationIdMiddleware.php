@@ -18,6 +18,8 @@ class CorrelationIdMiddleware
         $response->headers->set('X-Correlation-ID',$correlationId);
 
         return $response;
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+        $response->headers->set('X-Frame-Options', 'DENY');
     }
 }
 

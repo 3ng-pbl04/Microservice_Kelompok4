@@ -1,25 +1,81 @@
 # Product Service - Microservice API Documentation
 
 ## Deskripsi
-Product Service adalah microservice yang mengelola data produk dalam sistem. Service ini menyediakan REST API untuk operasi CRUD (Create, Read, Update, Delete) produk dengan validasi input, error handling, dan logging terstruktur dengan correlation ID.
+
+Product Service adalah microservice yang mengelola data produk dalam sistem. Service ini menyediakan REST API untuk operasi CRUD (Create, Read, Update, Delete) produk dengan validasi input, error handling terstruktur, serta logging berbasis **Correlation ID** untuk kebutuhan distributed tracing.
+
+Service ini dirancang **independen**, memiliki database sendiri, dan hanya dapat diakses oleh service lain melalui HTTP API.
+
+---
 
 ## Fitur Utama
-- CRUD Product (Create, Read, Update, Delete)
-- Validasi Input dengan custom error messages
-- Error Handling yang comprehensive
-- Middleware Correlation ID untuk tracking
-- JSON Structured Logging dengan correlation_id
-- HTTP Status Code yang sesuai standard
+
+* CRUD Product (Create, Read, Update, Delete)
+* Validasi input dengan custom error messages
+* Error handling konsisten berbasis HTTP status code
+* Middleware Correlation ID untuk request tracking
+* Structured JSON logging (siap untuk observability)
+* API versioning (`/api/v1`)
+
+---
+
+## Service Responsibility & Boundary
+
+### Tanggung Jawab
+
+Product Service bertanggung jawab penuh atas:
+
+* Penyimpanan dan validasi data produk
+* Operasi CRUD produk
+* Penyediaan data produk ke service lain melalui REST API
+
+### Bukan Tanggung Jawab
+
+Product Service **tidak menangani**:
+
+* Transaksi penjualan
+* Pembayaran
+* Autentikasi / manajemen user
+* Sinkronisasi stok lintas gudang
+
+Service lain (misalnya Order Service atau Transaction Service) **dilarang mengakses database secara langsung** dan wajib berkomunikasi melalui API Product Service.
+
+---
+
+## Architecture Overview
+
+Product Service merupakan bagian dari arsitektur microservice dan berjalan secara independen pada port **8003**.
+
+Komunikasi antar service menggunakan **HTTP REST API (JSON)** dengan **Correlation ID** untuk keperluan tracing.
+
+Contoh alur:
+
+```
+Client / API Gateway
+        ↓
+ Product Service (8003)
+        ↓
+     Database
+```
+
+---
+
+## Teknologi
+
+* PHP >= 8.2
+* Laravel 11.x
+* Database: SQLite / MySQL / MariaDB
+* Composer
 
 ---
 
 ## Setup & Running
 
 ### System Requirements
-- PHP >= 8.2
-- Laravel 11.x
-- MySQL/MariaDB
-- Composer
+
+* PHP >= 8.2
+* Composer
+* Database (SQLite atau MySQL)
 
 ### Quick Start
 
@@ -32,115 +88,79 @@ php artisan migrate
 php artisan serve --port=8003
 ```
 
-Server akan berjalan di: `http://localhost:8003`
+Service berjalan di:
+
+```
+http://localhost:8003
+```
 
 ---
 
 ## API Base URL
+
 ```
-http://localhost:8003/api
+http://localhost:8003/api/v1
+```
+
+Semua endpoint menggunakan versioning `v1` untuk menjaga backward compatibility.
+
+---
+
+## Health Check
+
+### GET /health
+
+Digunakan untuk memastikan service dalam kondisi aktif.
+
+**Response (200 OK)**
+
+```json
+{
+  "status": "UP",
+  "service": "product_service",
+  "time": "2025-12-10T06:35:15.003670Z"
+}
 ```
 
 ---
 
 ## API Endpoints
 
-### 1. GET /products - Retrieve All Products
+### 1. GET /products
 
-**Description**: Mengambil daftar lengkap semua produk
+Mengambil seluruh data produk.
 
 **Method**: GET
-**URL**: `/api/products`
+**URL**: `/api/v1/products`
 
-**Request Headers**:
+**Headers**:
+
 ```
-X-Correlation-ID: (optional - UUID untuk tracking)
+X-Correlation-ID: (optional)
 Content-Type: application/json
 ```
 
-**Request Example**:
-```bash
-curl -X GET "http://localhost:8003/api/products" \
-  -H "X-Correlation-ID: 550e8400-e29b-41d4-a716-446655440000" \
-  -H "Content-Type: application/json"
-```
+**Response (200 OK)**
 
-**Success Response (200 OK)**:
 ```json
 {
   "success": true,
   "message": "Products retrieved successfully",
-  "data": [
-    {
-      "id": 1,
-      "name": "Keyboard Mechanical",
-      "price": 300000,
-      "stock": 12,
-      "description": "RGB Blue Switch",
-      "created_at": "2025-12-10T05:29:57.000000Z",
-      "updated_at": "2025-12-10T05:29:57.000000Z"
-    },
-    {
-      "id": 3,
-      "name": "edit Keyboard Mechanical",
-      "price": 20000,
-      "stock": 18,
-      "description": "RGB Blue Switch",
-      "created_at": "2025-12-10T05:36:57.000000Z",
-      "updated_at": "2025-12-10T05:36:57.000000Z"
-    },
-    {
-      "id": 4,
-      "name": "Keyboard Mechanical",
-      "price": 300000,
-      "stock": 10,
-      "description": "RGB Blue Switch",
-      "created_at": "2025-12-10T05:37:20.000000Z",
-      "updated_at": "2025-12-10T05:37:47.000000Z"
-    },
-    {
-      "id": 5,
-      "name": "Test Product",
-      "price": 50000,
-      "stock": 10,
-      "description": "Test",
-      "created_at": "2025-12-10T06:35:35.000000Z",
-      "updated_at": "2025-12-10T06:35:35.000000Z"
-    }
-  ]
-}
-```
-
-**Error Response (500 Server Error)**:
-```json
-{
-  "success": false,
-  "message": "Failed to retrieve products"
+  "data": []
 }
 ```
 
 ---
 
-### 2. GET /products/{id} - Retrieve Single Product
+### 2. GET /products/{id}
 
-**Description**: Mengambil detail satu produk berdasarkan ID
+Mengambil detail produk berdasarkan ID.
 
 **Method**: GET
-**URL**: `/api/products/{id}`
+**URL**: `/api/v1/products/{id}`
 
-**URL Parameters**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| id | integer | ID produk (harus > 0) |
+**Response (200 OK)**
 
-**Request Example**:
-```bash
-curl -X GET "http://localhost:8003/api/products/1" \
-  -H "X-Correlation-ID: 550e8400-e29b-41d4-a716-446655440000" \
-  -H "Content-Type: application/json"
-```
-
-**Success Response (200 OK)**:
 ```json
 {
   "success": true,
@@ -150,60 +170,38 @@ curl -X GET "http://localhost:8003/api/products/1" \
     "name": "Keyboard Mechanical",
     "price": 300000,
     "stock": 12,
-    "description": "RGB Blue Switch",
-    "created_at": "2025-12-10T05:29:57.000000Z",
-    "updated_at": "2025-12-10T05:29:57.000000Z"
+    "description": "RGB Blue Switch"
   }
 }
 ```
 
-**Error Response (404 Not Found)**:
-```json
-{
-  "success": false,
-  "message": "Product not found"
-}
-```
+**Error**:
 
-**Error Response (400 Bad Request)**:
-```json
-{
-  "success": false,
-  "message": "Invalid product ID format"
-}
-```
+* 400: Invalid product ID format
+* 404: Product not found
 
 ---
 
-### 3. POST /products - Create Product
+### 3. POST /products
 
-**Description**: Membuat produk baru
+Membuat produk baru.
 
 **Method**: POST
-**URL**: `/api/products`
+**URL**: `/api/v1/products`
 
-**Request Body**:
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| name | string | Yes | Nama produk (max 255, unik) |
-| price | numeric | Yes | Harga produk (min 0) |
-| stock | integer | Yes | Jumlah stok (min 0) |
-| description | string | No | Deskripsi produk |
+**Request Body**
 
-**Request Example**:
-```bash
-curl -X POST "http://localhost:8003/api/products" \
-  -H "X-Correlation-ID: 550e8400-e29b-41d4-a716-446655440000" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Test Product",
-    "price": 50000,
-    "stock": 10,
-    "description": "Test"
-  }'
+```json
+{
+  "name": "Test Product",
+  "price": 50000,
+  "stock": 10,
+  "description": "Test"
+}
 ```
 
-**Success Response (201 Created)**:
+**Response (201 Created)**
+
 ```json
 {
   "success": true,
@@ -213,79 +211,34 @@ curl -X POST "http://localhost:8003/api/products" \
     "name": "Test Product",
     "price": 50000,
     "stock": 10,
-    "description": "Test",
-    "created_at": "2025-12-10T06:35:35.000000Z",
-    "updated_at": "2025-12-10T06:35:35.000000Z"
+    "description": "Test"
   }
 }
 ```
 
-**Error Response (422 Validation Error)**:
+**Validation Error (422)**
+
 ```json
 {
   "success": false,
   "message": "Validation error",
   "errors": {
-    "name": ["Nama produk wajib diisi"],
-    "price": ["Harga produk wajib diisi"],
-    "stock": ["Stok produk wajib diisi"]
+    "name": ["Nama produk wajib diisi"]
   }
 }
 ```
-
-**Error Response (409 Duplicate Name)**:
-```json
-{
-  "success": false,
-  "message": "Validation error",
-  "errors": {
-    "name": ["Nama produk sudah digunakan"]
-  }
-}
-```
-
-**Validation Rules**:
-| Field | Rule | Message |
-|-------|------|---------|
-| name | required, string, max:255, unique | Nama produk wajib diisi / sudah digunakan |
-| price | required, numeric, min:0, max:999999999.99 | Harga produk wajib diisi |
-| stock | required, integer, min:0 | Stok produk wajib diisi |
 
 ---
 
-### 4. PUT /products/{id} - Update Product
+### 4. PUT /products/{id}
 
-**Description**: Mengubah data produk (partial update allowed)
+Mengubah data produk (partial update diperbolehkan).
 
 **Method**: PUT
-**URL**: `/api/products/{id}`
+**URL**: `/api/v1/products/{id}`
 
-**URL Parameters**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| id | integer | ID produk yang akan diubah |
+**Response (200 OK)**
 
-**Request Body** (semua field optional):
-| Field | Type | Description |
-|-------|------|-------------|
-| name | string | Nama produk (max 255, unik) |
-| price | numeric | Harga produk (min 0) |
-| stock | integer | Jumlah stok (min 0) |
-| description | string | Deskripsi produk |
-
-**Request Example**:
-```bash
-curl -X PUT "http://localhost:8003/api/products/3" \
-  -H "X-Correlation-ID: 550e8400-e29b-41d4-a716-446655440000" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "edit Keyboard Mechanical",
-    "price": 20000,
-    "stock": 18
-  }'
-```
-
-**Success Response (200 OK)**:
 ```json
 {
   "success": true,
@@ -294,55 +247,22 @@ curl -X PUT "http://localhost:8003/api/products/3" \
     "id": 3,
     "name": "edit Keyboard Mechanical",
     "price": 20000,
-    "stock": 18,
-    "description": "RGB Blue Switch",
-    "created_at": "2025-12-10T05:36:57.000000Z",
-    "updated_at": "2025-12-10T05:36:57.000000Z"
-  }
-}
-```
-
-**Error Response (404 Not Found)**:
-```json
-{
-  "success": false,
-  "message": "Product not found"
-}
-```
-
-**Error Response (422 Validation Error)**:
-```json
-{
-  "success": false,
-  "message": "Validation error",
-  "errors": {
-    "price": ["Harga harus berupa angka"]
+    "stock": 18
   }
 }
 ```
 
 ---
 
-### 5. DELETE /products/{id} - Delete Product
+### 5. DELETE /products/{id}
 
-**Description**: Menghapus produk dari database
+Menghapus produk.
 
 **Method**: DELETE
-**URL**: `/api/products/{id}`
+**URL**: `/api/v1/products/{id}`
 
-**URL Parameters**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| id | integer | ID produk yang akan dihapus |
+**Response (200 OK)**
 
-**Request Example**:
-```bash
-curl -X DELETE "http://localhost:8003/api/products/1" \
-  -H "X-Correlation-ID: 550e8400-e29b-41d4-a716-446655440000" \
-  -H "Content-Type: application/json"
-```
-
-**✅ Response (200 OK)**:
 ```json
 {
   "success": true,
@@ -350,115 +270,62 @@ curl -X DELETE "http://localhost:8003/api/products/1" \
 }
 ```
 
-**Error Response (404 Not Found)**:
-```json
-{
-  "success": false,
-  "message": "Product not found"
-}
-```
+**Error**:
 
-**Error Response (409 Conflict)**:
-```json
-{
-  "success": false,
-  "message": "Cannot delete product because it is referenced by other records"
-}
-```
+* 404: Product not found
+* 409: Conflict (data masih direferensikan)
 
 ---
 
 ## HTTP Status Codes
 
-| Code | Status | Description |
-|------|--------|-------------|
-| 200 | OK | Request successful, data returned |
-| 201 | Created | Resource successfully created |
-| 400 | Bad Request | Invalid request (ID format, etc) |
-| 404 | Not Found | Resource not found |
-| 409 | Conflict | Constraint violation (duplicate, FK reference) |
-| 422 | Unprocessable Entity | Validation error |
-| 500 | Server Error | Internal server error |
+| Code | Description              |
+| ---- | ------------------------ |
+| 200  | Request berhasil         |
+| 201  | Resource berhasil dibuat |
+| 400  | Bad request              |
+| 404  | Resource tidak ditemukan |
+| 409  | Conflict                 |
+| 422  | Validation error         |
+| 500  | Internal server error    |
 
 ---
 
-## Correlation ID untuk Tracking
+## Correlation ID & Distributed Tracing
 
-Setiap request dapat include header X-Correlation-ID untuk distributed tracing across microservices.
+Setiap request dapat menyertakan header:
 
-**Features**:
-- Generate UUID otomatis jika tidak ada
-- Include di response header yang sama
-- Di-log dalam JSON format untuk audit trail
-
-**Example**:
-```bash
-# Request dengan custom Correlation ID
-curl -X GET "http://localhost:8003/api/products" \
-  -H "X-Correlation-ID: my-custom-id-123" \
-  -H "Content-Type: application/json"
-
-# Response akan include header yang sama
-X-Correlation-ID: my-custom-id-123
+```
+X-Correlation-ID
 ```
 
-**Log Output** (JSON format):
-```json
-{
-  "message": "Get Product List",
-  "context": {
-    "correlation_id": "my-custom-id-123"
-  },
-  "datetime": "2025-12-10T06:35:15.003670+00:00"
-}
-```
+Behavior:
+
+* Jika dikirim client → digunakan
+* Jika tidak → digenerate otomatis
+* Dikembalikan di response header
+* Dicatat di semua log
 
 ---
 
-## Structured JSON Logging
+## Structured Logging
 
-Semua logs disimpan dalam format JSON di `storage/logs/laravel.log`.
+Semua log disimpan dalam format JSON di:
 
-**Log Entry Example**:
+```
+storage/logs/laravel.log
+```
+
+Contoh log:
+
 ```json
 {
   "message": "Product Created",
   "context": {
     "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
-    "id": 5,
-    "name": "Test Product"
-  },
-  "level": 200,
-  "level_name": "INFO",
-  "channel": "local",
-  "datetime": "2025-12-10T06:35:35.190287+00:00"
-}
-```
-
-**Log Levels**:
-- INFO (200): Operasi berhasil
-- WARNING (300): Validasi gagal
-- ERROR (400): Database error / exceptions
-
----
-
-## Integration dengan API Gateway
-
-**JavaScript Example**:
-```javascript
-const correlationId = generateUUID();
-
-const response = await fetch('http://localhost:8003/api/products', {
-  method: 'GET',
-  headers: {
-    'Content-Type': 'application/json',
-    'X-Correlation-ID': correlationId
+    "id": 5
   }
-});
-
-// Response header akan berisi correlation ID yang sama
-const returnedId = response.headers.get('X-Correlation-ID');
-console.log(returnedId);
+}
 ```
 
 ---
@@ -470,8 +337,8 @@ CREATE TABLE products (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   name VARCHAR(255) NOT NULL UNIQUE,
   price DECIMAL(15,2) NOT NULL,
-  stock INT NOT NULL DEFAULT 0,
-  description LONGTEXT NULL,
+  stock INT NOT NULL,
+  description TEXT NULL,
   created_at TIMESTAMP NULL,
   updated_at TIMESTAMP NULL
 );
@@ -479,29 +346,34 @@ CREATE TABLE products (
 
 ---
 
-## Security Features
+## Security Considerations
 
-- Input validation pada semua endpoint
-- SQL injection prevention (Eloquent ORM)
-- No sensitive data dalam error responses di production
-- Structured logging untuk audit trail
-- Proper HTTP status codes
+* Validasi input di semua endpoint
+* Proteksi SQL Injection (Eloquent ORM)
+* Tidak menampilkan error sensitif di production
+* Logging terstruktur untuk audit trail
 
 ---
 
 ## Troubleshooting
 
-**Server tidak berjalan**:
+**Service tidak berjalan**
+
 ```bash
 php artisan serve --port=8003
 ```
 
-**Database error**:
+**Database error**
+
 ```bash
 php artisan migrate --refresh
 ```
 
-**Debug request**:
-Cek `storage/logs/laravel.log` untuk detail error. Search dengan `correlation_id` untuk track request flow.
+**Debug request**
+Gunakan `correlation_id` untuk menelusuri log di `storage/logs/laravel.log`.
 
+---
 
+### Status
+
+Product Service siap diintegrasikan dengan API Gateway dan service lain dalam arsitektur microservice.
