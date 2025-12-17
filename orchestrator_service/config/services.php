@@ -35,4 +35,15 @@ return [
         ],
     ],
 
+<<<<<<< Updated upstream
+=======
+     'user' => [
+        'url' => env('USER_SERVICE_URL', 'http://localhost:8000'),
+    ],
+    
+    'product' => [
+        'url' => env('PRODUCT_SERVICE_URL', 'http://localhost:8001'),
+    ],
+
+>>>>>>> Stashed changes
 ];
