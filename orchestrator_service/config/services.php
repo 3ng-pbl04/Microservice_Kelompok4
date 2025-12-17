@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+     'user' => [
+        'url' => env('USER_SERVICE_URL'),
+    ],
+
+    'product' => [
+        'url' => env('PRODUCT_SERVICE_URL'),
+    ],
+
 ];
