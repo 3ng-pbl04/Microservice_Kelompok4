@@ -36,11 +36,10 @@ return [
     ],
 
      'user' => [
-        'url' => env('USER_SERVICE_URL'),
+        'url' => env('USER_SERVICE_URL', 'http://localhost:8000'),
     ],
-
+    
     'product' => [
-        'url' => env('PRODUCT_SERVICE_URL'),
+        'url' => env('PRODUCT_SERVICE_URL', 'http://localhost:8001'),
     ],
-
 ];

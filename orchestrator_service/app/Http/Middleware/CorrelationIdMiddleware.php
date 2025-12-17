@@ -6,7 +6,6 @@ use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Symfony\Component\HttpFoundation\Response;
 
 class CorrelationIdMiddleware
 {
@@ -15,45 +14,53 @@ class CorrelationIdMiddleware
      *
      * @param  \Illuminate\Http\Request  $request
      * @param  \Closure  $next
-     * @return \Symfony\Component\HttpFoundation\Response
+     * @return mixed
      */
-    public function handle(Request $request, Closure $next): Response
+    public function handle(Request $request, Closure $next)
     {
-        // Ambil correlation ID dari header atau buat baru
-        $correlationId = $request->header('X-Correlation-ID', (string) Str::uuid());
+        // ✅ POIN C: Mengirim dan menerima Correlation ID
+        $correlationId = $request->header('X-Correlation-ID') ?? (string) Str::uuid();
         
-        // Set correlation ID ke context log
-        Log::withContext([
+        // Simpan di request untuk digunakan di controller
+        $request->attributes->set('correlation_id', $correlationId);
+        
+        // Set context untuk logging terdistribusi
+        Log::shareContext([
             'correlation_id' => $correlationId,
-            'request_path' => $request->path(),
-            'request_method' => $request->method(),
+            'service' => 'gateway',
+            'request_id' => Str::uuid(),
+            'timestamp' => now()->toISOString()
         ]);
         
         // Log incoming request
-        Log::info('Request received', [
-            'correlation_id' => $correlationId,
-            'path' => $request->path(),
+        Log::info('Gateway Request Incoming', [
             'method' => $request->method(),
+            'url' => $request->fullUrl(),
             'ip' => $request->ip(),
             'user_agent' => $request->userAgent(),
+            'headers' => $request->headers->all()
         ]);
-        
-        // Simpan correlation ID ke request attributes
-        $request->attributes->set('correlation_id', $correlationId);
-        
-        // Process request
+
+        // Catat waktu mulai
+        $startTime = microtime(true);
+
         $response = $next($request);
-        
-        // Tambahkan correlation ID ke response header
+
+        // ✅ POIN C: Tambahkan correlation ID ke response header
         $response->headers->set('X-Correlation-ID', $correlationId);
-        
-        // Log response
-        Log::info('Response sent', [
-            'correlation_id' => $correlationId,
+        $response->headers->set('X-Service-Name', 'Gateway-Service');
+        $response->headers->set('X-Response-Time', now()->toISOString());
+
+        // Hitung response time (alternatif tanpa LARAVEL_START)
+        $responseTime = microtime(true) - $startTime;
+
+        // Log outgoing response
+        Log::info('Gateway Response Outgoing', [
             'status_code' => $response->getStatusCode(),
-            'path' => $request->path(),
+            'correlation_id' => $correlationId,
+            'response_time_ms' => round($responseTime * 1000, 2) // dalam milidetik
         ]);
-        
+
         return $response;
     }
 }
